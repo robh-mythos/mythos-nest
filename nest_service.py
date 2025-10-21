@@ -190,8 +190,32 @@ def debug_env():
         "max_files": MAX_FILES,
         "ttl_secs": TTL_SECS,
     }
+@app.get("/debug_driveid")
+def debug_driveid():
+    import os, reprlib
+    raw = os.getenv("NEST_DRIVE_FOLDER_ID")
+    return {
+        "exists": raw is not None,
+        "repr": reprlib.repr(raw),
+        "length": len(raw or ""),
+        "has_newline": bool(raw and "\n" in raw),
+        "has_space": bool(raw and " " in raw)
+    }
+
 
 @app.get("/")
 def root():
     return {"service":"Mythos Nest","version":"4.0.0",
             "routes":["/ping","/health","/index","/search?q=..."]}
+
+@app.get("/debug_driveid")
+def debug_driveid():
+    import reprlib, os
+    raw = os.getenv("NEST_DRIVE_FOLDER_ID", "")
+    return {
+        "repr": reprlib.repr(raw),
+        "len": len(raw),
+        "has_newline": "\n" in raw,
+        "has_space": " " in raw,
+    }
+
