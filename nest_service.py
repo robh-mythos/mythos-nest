@@ -3,6 +3,19 @@ import json
 import time
 from typing import List, Dict, Any, Optional
 
+# -----------------------------------------------------------------
+# Temporary in-file settings stub – replace once env vars are ready
+# -----------------------------------------------------------------
+import types
+settings = types.SimpleNamespace(
+    NEST_CLIENT_SECRET_JSON=None,
+    NEST_TOKEN_JSON=None,
+    NEST_DRIVE_FOLDER_ID=None,
+    NEST_MAX_FILES=5,
+    NEST_TTL_SECS=3600
+)
+
+
 import sys
 print("[Mythos Nest] Running from file:", __file__)
 print("[Mythos Nest] Python argv:", sys.argv)
