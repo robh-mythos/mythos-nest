@@ -2,40 +2,40 @@ import io
 import json
 import time
 from typing import List, Dict, Any, Optional
-
-# -----------------------------------------------------------------
-# Temporary in-file settings stub – replace once env vars are ready
-# -----------------------------------------------------------------
-import types
-settings = types.SimpleNamespace(
-    NEST_CLIENT_SECRET_JSON=None,
-    NEST_TOKEN_JSON=None,
-    NEST_DRIVE_FOLDER_ID=None,
-    NEST_MAX_FILES=5,
-    NEST_TTL_SECS=3600
-)
-
-
 import sys
+import os
+from types import SimpleNamespace
+
 print("[Mythos Nest] Running from file:", __file__)
 print("[Mythos Nest] Python argv:", sys.argv)
 print("[Mythos Nest] Routes loading...")
 
+# -----------------------------------------------------------------------------
+# Settings
+# -----------------------------------------------------------------------------
+try:
+    from config import settings  # use config.py if present
+except Exception as e:
+    print(f"[Mythos Nest] Using internal settings stub (no config.py): {e}")
+    settings = SimpleNamespace(
+        NEST_CLIENT_SECRET_JSON=os.getenv("NEST_CLIENT_SECRET_JSON"),
+        NEST_TOKEN_JSON=os.getenv("NEST_TOKEN_JSON"),
+        NEST_DRIVE_FOLDER_ID=os.getenv("NEST_DRIVE_FOLDER_ID"),
+        NEST_MAX_FILES=int(os.getenv("NEST_MAX_FILES", 5)),
+        NEST_TTL_SECS=int(os.getenv("NEST_TTL_SECS", 3600)),
+    )
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pdfminer.high_level import extract_text
-
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaIoBaseDownload
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 
-from config import settings
-
 # -----------------------------------------------------------------------------
-# App
+# App setup
 # -----------------------------------------------------------------------------
 app = FastAPI(title="Mythos Nest", version="2.0.0")
 app.add_middleware(
@@ -47,26 +47,19 @@ app.add_middleware(
 
 SCOPES = ["https://www.googleapis.com/auth/drive.readonly"]
 
-# In-memory index
 INDEX: List[Dict[str, Any]] = []
 INDEXED_AT: Optional[float] = None
 
 # -----------------------------------------------------------------------------
-# Google Drive auth (OAuth token pre-generated locally; refreshed automatically)
+# Google Drive connection
 # -----------------------------------------------------------------------------
 def _build_drive() -> Any:
-    """
-    Render cannot do interactive OAuth flows. We load the saved token JSON
-    (NEST_TOKEN_JSON) and client credentials JSON (NEST_CLIENT_SECRET_JSON),
-    then refresh as needed.
-    """
     if not settings.NEST_CLIENT_SECRET_JSON or not settings.NEST_TOKEN_JSON:
         raise RuntimeError("Google OAuth JSON is missing (NEST_CLIENT_SECRET_JSON / NEST_TOKEN_JSON)")
 
     token_info = json.loads(settings.NEST_TOKEN_JSON)
     creds = Credentials.from_authorized_user_info(token_info, SCOPES)
 
-    # Ensure refreshable tokens have client id/secret in the request session
     if creds and creds.expired and creds.refresh_token:
         creds.refresh(Request())
 
@@ -87,7 +80,7 @@ class SearchResponse(BaseModel):
     indexed_at: float
 
 # -----------------------------------------------------------------------------
-# Utilities
+# Helpers
 # -----------------------------------------------------------------------------
 def _now() -> float:
     return time.time()
@@ -129,7 +122,6 @@ def _index_drive_folder() -> int:
         raise RuntimeError("NEST_DRIVE_FOLDER_ID is not set.")
 
     service = _build_drive()
-
     q = f"'{folder_id}' in parents and mimeType='application/pdf' and trashed=false"
     files = service.files().list(q=q, fields="files(id, name, mimeType, size)").execute().get("files", [])
     files = sorted(files, key=lambda f: f.get("id"), reverse=True)[: settings.NEST_MAX_FILES]
@@ -161,61 +153,5 @@ def ensure_index():
         _index_drive_folder()
 
 # -----------------------------------------------------------------------------
-# Endpoints
-# -----------------------------------------------------------------------------
-@app.get("/health")
-def health():
-    return {"status": "nest-ok", "docs_indexed": len(INDEX), "indexed_at": INDEXED_AT}
-
-@app.get("/index")
-@app.post("/index")
-def reindex():
-    n = _index_drive_folder()
-    return {"status": "reindexed", "docs_indexed": n, "indexed_at": INDEXED_AT}
-
-@app.get("/docs/indexed")
-def docs_indexed():
-    ensure_index()
-    return {"count": len(INDEX)}
-
-@app.get("/search", response_model=SearchResponse)
-def search(q: str = Query(..., min_length=2), top_k: int = 5):
-    ensure_index()
-    if not INDEX:
-        return SearchResponse(hits=[], total_docs=0, indexed_at=INDEXED_AT or 0.0)
-
-    scored = []
-    for doc in INDEX:
-        s = _score(doc["text"], q)
-        if s > 0:
-            scored.append({
-                "id": doc["id"],
-                "title": doc["title"],
-                "score": s,
-                "snippet": _snippet(doc["text"], q)
-            })
-
-    scored.sort(key=lambda x: x["score"], reverse=True)
-    hits = [SearchHit(**h) for h in scored[: top_k]]
-    return SearchResponse(hits=hits, total_docs=len(INDEX), indexed_at=INDEXED_AT or 0.0)
-
-@app.get("/debug_env")
-def debug_env():
-    import os
-    return {
-        "has_client_secret": bool(os.getenv("NEST_CLIENT_SECRET_JSON")),
-        "has_token": bool(os.getenv("NEST_TOKEN_JSON")),
-        "has_folder_id": bool(os.getenv("NEST_DRIVE_FOLDER_ID")),
-    }
-
-@app.get("/")
-@app.get("/ping")
-def ping():
-    return {"message": "pong from nest_service"}
-
-def root():
-    return {
-        "service": "Mythos Nest",
-        "version": "2.0.0",
-        "routes": ["/health", "/index", "/docs/indexed", "/search?q=..."]
-    }
+# Routes
+# -------------------
