@@ -1,19 +1,13 @@
-# Use an official lightweight Python image
 FROM python:3.11-slim
 
-# Set working directory
+# system deps for pdf2image (poppler) and OCR (tesseract)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    poppler-utils tesseract-ocr \
+ && rm -rf /var/lib/apt/lists/*
+
 WORKDIR /app
-
-# Copy everything in the current directory into the container
-COPY . /app
-
-# Install dependencies
+COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Expose port for Render
-EXPOSE 8080
-
-# Start the FastAPI app
+# gunicorn serves FastAPI
 CMD ["gunicorn", "nest_service:app", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8080"]
-
-
