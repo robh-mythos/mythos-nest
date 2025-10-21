@@ -10,6 +10,8 @@ print("[Mythos Nest] Running from file:", __file__)
 print("[Mythos Nest] Python argv:", sys.argv)
 print("[Mythos Nest] Routes loading...")
 
+print("[Mythos Nest] Import success — FastAPI app object loaded correctly.")
+
 # -----------------------------------------------------------------------------
 # Settings
 # -----------------------------------------------------------------------------
