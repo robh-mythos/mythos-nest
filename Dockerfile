@@ -15,3 +15,4 @@ EXPOSE 8080
 
 # Start the FastAPI app
 CMD ["gunicorn", "nest_service:app", "-w", "2", "-k", "uvicorn.workers.UvicornWorker", "-b", "0.0.0.0:8080"]
+
